@@ -82,8 +82,8 @@ def test_pad_to_width():
     im = Image.new("RGB", (100, 50), (1, 2, 3))
     out = imaging.pad_to_width(im, 200)
     assert out.size == (200, 50)
-    assert out.getpixel((50, 25)) == (255, 255, 255)   # 左补白
-    assert out.getpixel((51, 25)) == (1, 2, 3)
+    assert out.getpixel((49, 25)) == (255, 255, 255)   # 左侧补白（偏移 50）
+    assert out.getpixel((50, 25)) == (1, 2, 3)         # 内容从 x=50 开始
     # 比目标宽时原样
     assert imaging.pad_to_width(im, 80) is im
 

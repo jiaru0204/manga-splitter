@@ -49,10 +49,10 @@ def main():
         old_path_frame(img)
     t_old = (time.perf_counter() - t0) / FRAMES * 1000
 
+    from PySide6.QtCore import Qt
     t0 = time.perf_counter()
     for _ in range(FRAMES):
-        _ = pm.scaled(VIEW_W, VIEW_H, aspectRatioMode=1,
-                      mode=1)  # KeepAspectRatio + SmoothTransformation
+        _ = pm.scaled(VIEW_W, VIEW_H, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     t_new = (time.perf_counter() - t0) / FRAMES * 1000
 
     print(f"拖框一帧重绘（{SRC_W}x{SRC_H} → {VIEW_W}x{VIEW_H}，{FRAMES} 帧平均）")

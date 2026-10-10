@@ -40,6 +40,7 @@ def main() -> int:
     assert win.stack.currentIndex() == 1
 
     # ---- 分页页：加文件夹 + 计划 ----
+    win.split_page.clear_folders()          # 丢掉上次运行残留的配置
     win.split_page._append_folder(src)
     assert win.split_page.tree.topLevelItemCount() == 1
     out_dir = win.split_page.resolve_out_dir(src)

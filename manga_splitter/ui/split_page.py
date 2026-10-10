@@ -48,7 +48,7 @@ class SplitPage(QWidget):
         root.addWidget(split, 1)
 
         # ---- 左：待处理文件夹 ----
-        gb_f = QGroupBox("1. 待处理文件夹", property_="card")
+        gb_f = QGroupBox("1. 待处理文件夹")
         gb_f.setProperty("class", "card")
         v = QVBoxLayout(gb_f)
         row = QHBoxLayout()

@@ -52,8 +52,8 @@ def main():
         new.execute_plan(p, os.path.join(tmp, "o_new"), workers=8)
         shutil.rmtree(os.path.join(tmp, "o_new"))
 
-    t_old_exec = timeit(run_old, rounds=2)
-    t_new_exec = timeit(run_new, rounds=2)
+    t_old_exec = timeit(run_old, rounds=3)
+    t_new_exec = timeit(run_new, rounds=3)
     out_imgs = 40 * 2 + 10
 
     # ---------- 批量裁剪 ----------
@@ -69,8 +69,8 @@ def main():
                            lambda i: outs[i], cropper.BaseConfig())
         shutil.rmtree(os.path.join(tmp, "c_new"))
 
-    t_old_crop = timeit(old_batch, rounds=2)
-    t_new_crop = timeit(new_batch, rounds=2)
+    t_old_crop = timeit(old_batch, rounds=3)
+    t_new_crop = timeit(new_batch, rounds=3)
 
     def row(name, to, tn, n):
         print(f"{name:<14} {to*1000:>9.0f} ms  {tn*1000:>9.0f} ms  "

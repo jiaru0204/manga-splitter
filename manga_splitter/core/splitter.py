@@ -13,7 +13,6 @@
   7. 输出统一 PNG（无损），输出到新目录，不动原图。
 
 相对旧版的改进：
-  - build_plan 的尺寸扫描改为并行读头部（机械盘/网络盘明显更快）；
   - build_plan / execute_plan 都支持 cancel 回调 —— 旧版「停止」按钮在
     单册大任务中实际不生效（只能在册与册之间停），现在可即时中断；
   - 单张写盘失败不再拖垮整册：记入 result.write_errors，最后统一上报。
@@ -91,7 +90,7 @@ def build_plan(folder: str, progress: Progress | None = None,
     result = PlanResult()
 
     paths = [os.path.join(folder, n) for n in names]
-    sizes = read_sizes(paths)  # 并行读头部
+    sizes = read_sizes(paths)
 
     metas: list[tuple[str, tuple[int, int]]] = []
     for i, (n, sz) in enumerate(zip(names, sizes)):

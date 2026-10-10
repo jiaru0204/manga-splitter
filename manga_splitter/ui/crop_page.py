@@ -362,6 +362,11 @@ class CropPage(QWidget):
 
         row = QHBoxLayout()
         row.addWidget(QLabel("底色"))
+        # 注意：swatch 必须早于 radio 创建 —— 第一个 radio 勾选时会立刻触发
+        # toggled -> _on_color_change -> _update_swatch
+        self.swatch = QLabel()
+        self.swatch.setFixedSize(22, 22)
+        self.swatch.setStyleSheet("border:1px solid #d8dee9; background:#ffffff;")
         self.color_mode_group: list[QRadioButton] = []
         for text, val in (("白", "white"), ("黑", "black"), ("灰", "gray"), ("自定", "custom")):
             rb = QRadioButton(text)
@@ -371,9 +376,6 @@ class CropPage(QWidget):
                 rb.setChecked(True)
             self.color_mode_group.append(rb)
             row.addWidget(rb)
-        self.swatch = QLabel()
-        self.swatch.setFixedSize(22, 22)
-        self.swatch.setStyleSheet("border:1px solid #d8dee9; background:#ffffff;")
         row.addWidget(self.swatch)
         b = QPushButton("调色")
         b.setFixedWidth(48)
@@ -1085,10 +1087,14 @@ class CropPage(QWidget):
         self.base_h_edit.setText(str(self.pix.height()))
 
     def _update_swatch(self):
+        if not hasattr(self, "swatch"):     # 构造期信号早于控件创建
+            return
         rgb = self._current_base_rgb()
         self.swatch.setStyleSheet(f"border:1px solid #d8dee9; background:{_hex(rgb)};")
 
     def _update_side_swatches(self):
+        if not hasattr(self, "swatch_l"):
+            return
         self.swatch_l.setStyleSheet(
             f"border:1px solid #d8dee9; background:{_hex(self.left_rgb)};")
         self.swatch_r.setStyleSheet(
