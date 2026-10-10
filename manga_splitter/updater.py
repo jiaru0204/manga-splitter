@@ -23,6 +23,7 @@ import urllib.request
 import urllib.error
 
 from . import __version__, UPDATE_REPO
+from .settings import app_dir
 
 UA = {"User-Agent": "manga-splitter-updater"}
 TIMEOUT = 15
