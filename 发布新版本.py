@@ -21,7 +21,8 @@ import urllib.request
 ROOT = os.path.dirname(os.path.abspath(__file__))
 REPO = "jiaru0204/manga-splitter"
 INIT = os.path.join(ROOT, "manga_splitter", "__init__.py")
-EXE = os.path.join(ROOT, "dist", "漫画双页分割器.exe")
+APP_DIR = os.path.join(ROOT, "dist", "漫画双页分割器")
+EXE = os.path.join(APP_DIR, "漫画双页分割器.exe")
 
 
 def token() -> str:
@@ -70,12 +71,15 @@ def main() -> int:
     open(INIT, "w", encoding="utf-8").write(src)
     print(f"[1/4] 版本号 -> v{ver}")
 
-    # 2) 打包
-    print("[2/4] 打包 exe…")
+    # 2) 打包（文件夹版 + zip；程序内更新下载的就是这个 zip）
+    print("[2/4] 打包…")
     r = subprocess.run([sys.executable, os.path.join(ROOT, "build_exe.py")], cwd=ROOT)
     if r.returncode != 0 or not os.path.exists(EXE):
         sys.exit("打包失败")
-    print(f"      {EXE}  {os.path.getsize(EXE)/1048576:.1f} MB")
+    zip_path = os.path.join(ROOT, "dist", f"MangaSplitter-{ver}-win64.zip")
+    if not os.path.exists(zip_path):
+        sys.exit(f"未找到分发包 {zip_path}")
+    print(f"      {zip_path}  {os.path.getsize(zip_path)/1048576:.1f} MB")
 
     # 3) 建 Release
     tok = token()
@@ -85,7 +89,8 @@ def main() -> int:
         rel = api("POST", f"/repos/{REPO}/releases", tok, {
             "tag_name": tag, "name": f"{tag}",
             "body": f"## 漫画双页分割器 {tag}\n\n{notes}\n\n"
-                    f"下载 **MangaSplitter-{tag}.exe**，双击即用。",
+                    f"下载 **MangaSplitter-{ver}-win64.zip**，解压后双击里面的 exe 即用。\n"
+                    f"（程序内「检查更新」会自动下载并替换安装）",
             "draft": False, "prerelease": False,
         })
         rel_id = rel["id"]
@@ -97,15 +102,15 @@ def main() -> int:
         else:
             raise
 
-    # 4) 上传附件（走 uploads.github.com）
+    # 4) 上传附件（走 uploads.github.com；附件名必须 ASCII）
     print("[4/4] 上传附件…")
-    with open(EXE, "rb") as f:
+    with open(zip_path, "rb") as f:
         blob = f.read()
-    name = f"MangaSplitter-{tag}.exe"
-    res = api("POST", f"/repos/{REPO}/releases/{rel_id}/assets?name={name}",
-              tok, raw=blob, host="uploads.github.com")
+    name = f"MangaSplitter-{ver}-win64.zip"
+    api("POST", f"/repos/{REPO}/releases/{rel_id}/assets?name={name}",
+        tok, raw=blob, host="uploads.github.com")
     print(f"✔ 发布完成：https://github.com/{REPO}/releases/tag/{tag}")
-    print("  已安装的旧版下次启动即可检测到更新。")
+    print("  已安装的旧版下次启动/点「检查更新」即可自动升级。")
     return 0
 
 

@@ -55,6 +55,15 @@ def main() -> int:
         pass
 
     argv = sys.argv[1:]
+    if "--apply-update" in argv:
+        # 由「更新助手」模式运行：替换目录并重启，不进入 GUI
+        from .updater import run_apply_update_helper
+        i = argv.index("--apply-update")
+        try:
+            return run_apply_update_helper(argv[i + 1], argv[i + 2])
+        except Exception as e:  # noqa: BLE001
+            print("apply-update failed:", e)
+            return 1
     if "--version" in argv or "-V" in argv:
         from . import __version__
         print(f"漫画双页分割器 v{__version__}")

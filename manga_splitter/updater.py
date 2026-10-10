@@ -49,11 +49,19 @@ def is_newer(remote_tag: str, local: str = __version__) -> bool:
         return False
 
 
+def is_onedir() -> bool:
+    """当前是否为「文件夹版」（onedir）—— 特征是 exe 旁边有 _internal 目录。"""
+    return os.path.isdir(os.path.join(app_dir(), "_internal"))
+
+
 def check_latest(repo: str = UPDATE_REPO) -> dict:
     """
     查询最新 release。返回：
-      {ok, error?, current, latest?, tag?, notes?, asset_url?, asset_name?, asset_size?}
+      {ok, error?, current, latest?, tag?, notes?, asset_url?, asset_name?,
+       asset_size?, onedir?}
     ok=False 表示网络/仓库问题（静默失败，不打扰用户）。
+
+    附件选择：文件夹版优先取 .zip（含 _internal），单文件版取 .exe。
     """
     url = f"https://api.github.com/repos/{repo}/releases/latest"
     req = urllib.request.Request(url, headers=UA)
@@ -64,13 +72,19 @@ def check_latest(repo: str = UPDATE_REPO) -> dict:
         return {"ok": False, "error": str(e), "current": __version__}
 
     tag = data.get("tag_name", "")
-    asset_url, asset_name, asset_size = None, None, 0
-    for a in data.get("assets", []):
-        if (a.get("name") or "").lower().endswith(".exe"):
-            asset_url = a.get("browser_download_url")
-            asset_name = a.get("name")
-            asset_size = a.get("size", 0)
+    want = ".zip" if is_onedir() else ".exe"
+    assets = data.get("assets", [])
+    pick = None
+    for a in assets:                       # 先找匹配当前形态的
+        if (a.get("name") or "").lower().endswith(want):
+            pick = a
             break
+    if pick is None:                       # 退而求其次
+        for a in assets:
+            n = (a.get("name") or "").lower()
+            if n.endswith(".zip") or n.endswith(".exe"):
+                pick = a
+                break
 
     return {
         "ok": True,
@@ -78,9 +92,10 @@ def check_latest(repo: str = UPDATE_REPO) -> dict:
         "tag": tag,
         "latest": is_newer(tag),
         "notes": (data.get("body") or "")[:2000],
-        "asset_url": asset_url,
-        "asset_name": asset_name,
-        "asset_size": asset_size,
+        "asset_url": pick.get("browser_download_url") if pick else None,
+        "asset_name": pick.get("name") if pick else None,
+        "asset_size": pick.get("size", 0) if pick else 0,
+        "onedir": is_onedir(),
     }
 
 
@@ -120,35 +135,118 @@ def download_asset(url: str, dst: str,
 
 
 def cleanup_old_versions():
-    """启动时清理上次更新残留的旧 exe（*.old.exe）。"""
+    """
+    启动时清理上次更新残留：
+      - 单文件版：<名字>.old.exe
+      - 文件夹版：同级目录里的 <名字>.old 目录、<名字>.new 目录
+    """
     if not getattr(sys, "frozen", False):
         return
     d = os.path.dirname(os.path.abspath(sys.executable))
     try:
         for n in os.listdir(d):
+            p = os.path.join(d, n)
             if n.lower().endswith(".old.exe"):
                 try:
-                    os.remove(os.path.join(d, n))
+                    os.remove(p)
                 except OSError:
                     pass
+        parent = os.path.dirname(d)
+        name = os.path.basename(d)
+        for suffix in (".old", ".new"):
+            p = os.path.join(parent, name + suffix)
+            if os.path.isdir(p):
+                import shutil
+                shutil.rmtree(p, ignore_errors=True)
     except OSError:
         pass
 
 
-def apply_update_and_restart(new_exe: str) -> None:
+def apply_update_and_restart(new_file: str) -> None:
     """
-    用热替换应用更新并重启：
-      当前 exe -> <原名>.old.exe；新 exe -> 当前 exe 的文件名；启动新进程。
-    调用后当前进程应立即退出（由调用方负责）。
+    应用更新并重启。调用后当前进程应立即退出（由调用方负责）。
+
+    单文件版：Windows 允许重命名运行中的 exe —— 当前 exe 改名 .old.exe，
+              新 exe 顶上来，再启动新进程。
+    文件夹版：把 zip 解到 <名字>.new/，由**新版本自己**启动一个带
+              --apply-update 的进程去替换目录（它不在被占用的目录里运行，
+              所以能安全地改名/移动旧目录），随后当前进程退出。
     """
     import subprocess
-    cur = os.path.abspath(sys.executable)
-    old = cur[:-4] + ".old.exe" if cur.lower().endswith(".exe") else cur + ".old.exe"
+    exe = os.path.abspath(sys.executable)
+
+    if is_onedir():
+        import shutil
+        import zipfile
+        app_d = app_dir()
+        parent = os.path.dirname(app_d)
+        name = os.path.basename(app_d)
+        new_dir = os.path.join(parent, name + ".new")
+        shutil.rmtree(new_dir, ignore_errors=True)
+        os.makedirs(new_dir, exist_ok=True)
+        with zipfile.ZipFile(new_file) as z:
+            z.extractall(new_dir)
+        helper = os.path.join(new_dir, os.path.basename(exe))
+        if not os.path.exists(helper):      # zip 里多套了一层同名文件夹
+            for n in os.listdir(new_dir):
+                cand = os.path.join(new_dir, n, os.path.basename(exe))
+                if os.path.exists(cand):
+                    helper = cand
+                    break
+        subprocess.Popen([helper, "--apply-update", app_d, os.path.dirname(helper)],
+                         cwd=os.path.dirname(helper), close_fds=True)
+        return
+
+    old = exe[:-4] + ".old.exe" if exe.lower().endswith(".exe") else exe + ".old.exe"
     if os.path.exists(old):
         try:
             os.remove(old)
         except OSError:
             pass
-    os.replace(cur, old)          # 运行中的 exe 可以改名
-    os.replace(new_exe, cur)      # 新版本顶上来，保持文件名不变
-    subprocess.Popen([cur], cwd=os.path.dirname(cur), close_fds=True)
+    os.replace(exe, old)          # 运行中的 exe 可以改名
+    os.replace(new_file, exe)     # 新版本顶上来，保持文件名不变
+    subprocess.Popen([exe], cwd=os.path.dirname(exe), close_fds=True)
+
+
+def run_apply_update_helper(old_dir: str, new_dir: str) -> int:
+    """
+    在「新版本目录」里运行的替换助手：
+      1. 等旧进程退出（旧 exe 文件锁释放）；
+      2. 旧目录改名 <名字>.old；
+      3. 新目录搬到旧目录的位置；
+      4. 启动正主，删除残留旧目录。
+    """
+    import shutil
+    import subprocess
+    import time
+
+    parent = os.path.dirname(os.path.abspath(old_dir))
+    name = os.path.basename(os.path.abspath(old_dir))
+    exe_name = os.path.basename(sys.executable)
+    old_backup = os.path.join(parent, name + ".old")
+
+    # 等旧进程放手
+    for _ in range(150):
+        try:
+            os.rename(old_dir, old_dir)     # 能改名说明没被占用
+            break
+        except OSError:
+            time.sleep(0.2)
+    else:
+        return 1
+
+    shutil.rmtree(old_backup, ignore_errors=True)
+    try:
+        os.rename(old_dir, old_backup)
+    except OSError:
+        return 2
+    try:
+        shutil.move(os.path.abspath(new_dir), old_dir)
+    except Exception:  # noqa: BLE001
+        os.rename(old_backup, old_dir)      # 回滚
+        return 3
+
+    subprocess.Popen([os.path.join(old_dir, exe_name)], cwd=old_dir, close_fds=True)
+    time.sleep(1.0)
+    shutil.rmtree(old_backup, ignore_errors=True)
+    return 0

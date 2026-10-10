@@ -140,7 +140,13 @@ class MainWindow(QMainWindow):
         if notes:
             msg += f"\n\n更新说明：\n{notes[:600]}"
         if not info.get("asset_url"):
-            msg += "\n\n⚠ 该版本没有可下载的 exe 附件。"
+            msg += "\n\n⚠ 该版本没有可下载的更新包。"
+            QMessageBox.information(self, "发现新版本", msg)
+            return
+        # 文件夹版需要 .zip 更新包（内含 _internal）；拿到 .exe 说明发版时漏传 zip
+        if info.get("onedir") and not (info.get("asset_name") or "").lower().endswith(".zip"):
+            msg += (f"\n\n⚠ 该版本只提供了单文件版（{info.get('asset_name')}），"
+                    f"与当前「文件夹版」不匹配。\n请到 Release 页面手动下载 zip 版本。")
             QMessageBox.information(self, "发现新版本", msg)
             return
         r = QMessageBox.question(self, "发现新版本", msg + "\n\n立即下载并更新？")
